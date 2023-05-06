@@ -17,27 +17,6 @@ pub struct User {
     pub password: String,
 }
 
-impl AppState {
-    pub async fn create_user(
-        &self,
-        username: &str,
-        password: &str,
-    ) -> Result<SqliteQueryResult, sqlx::Error> {
-        sqlx::query("INSERT INTO users (username, password) VALUES (?, ?)")
-            .bind(username)
-            .bind(password)
-            .execute(&self.db)
-            .await
-    }
-
-    pub async fn find_user(&self, username: &str) -> Result<User, sqlx::Error> {
-        sqlx::query_as("SELECT * FROM users WHERE username = ?")
-            .bind(username)
-            .fetch_one(&self.db)
-            .await
-    }
-}
-
 #[derive(serde::Deserialize)]
 pub struct CreateUserBody {
     username: String,
@@ -76,6 +55,27 @@ pub async fn get(
 
 pub async fn get_me(Auth(user): Auth) -> Json<User> {
     Json(user)
+}
+
+impl AppState {
+    pub async fn create_user(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> Result<SqliteQueryResult, sqlx::Error> {
+        sqlx::query("INSERT INTO users (username, password) VALUES (?, ?)")
+            .bind(username)
+            .bind(password)
+            .execute(&self.db)
+            .await
+    }
+
+    pub async fn find_user(&self, username: &str) -> Result<User, sqlx::Error> {
+        sqlx::query_as("SELECT * FROM users WHERE username = ?")
+            .bind(username)
+            .fetch_one(&self.db)
+            .await
+    }
 }
 
 pub async fn create_table(pool: &Pool<Sqlite>) -> Result<SqliteQueryResult, sqlx::Error> {
