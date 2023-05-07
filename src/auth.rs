@@ -1,13 +1,37 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::FromRequestParts,
+    extract::{FromRequestParts, State},
     http::{request::Parts, StatusCode},
+    response::{IntoResponse, Response},
+    Json,
 };
 use sqlx::{sqlite::SqliteQueryResult, Pool, Sqlite};
 use uuid::Uuid;
 
 use crate::{user::User, AppState};
+
+#[derive(serde::Deserialize)]
+pub struct LoginBody {
+    username: String,
+    password: String,
+}
+
+pub async fn login(State(app): State<Arc<AppState>>, Json(body): Json<LoginBody>) -> Response {
+    let Ok(user) = app.find_user(&body.username).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    if user.password != body.password {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    let Ok(session) = app.create_session(&user).await else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    Json(session).into_response()
+}
 
 pub struct Auth(pub User);
 

@@ -4,9 +4,13 @@ use std::sync::Arc;
 use axum::routing::{get, post};
 use axum::Router;
 use sqlx::sqlite::SqlitePoolOptions;
+use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
+use tracing_subscriber::filter::LevelFilter;
 
 mod auth;
 mod channel;
+mod comment;
 mod feed;
 mod user;
 
@@ -22,6 +26,10 @@ impl AppState {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt::fmt()
+        .with_max_level(LevelFilter::DEBUG)
+        .init();
+
     let pool = SqlitePoolOptions::new()
         .connect("sqlite:stargram.db")
         .await
@@ -30,21 +38,37 @@ async fn main() {
     user::create_table(&pool).await.unwrap();
     auth::create_table(&pool).await.unwrap();
     feed::create_table(&pool).await.unwrap();
+    comment::create_table(&pool).await.unwrap();
 
+    let cors_layer = CorsLayer::permissive();
     let app_state = Arc::new(AppState::new(pool));
+
+    let user_router = Router::new()
+        .route("/", post(user::create))
+        .route("/@me", get(user::get_me))
+        .route("/:name", get(user::get))
+        .route("/avatar/:name", get(user::avatar));
+
+    let channel_router = Router::new()
+        .route("/", post(channel::create))
+        .route("/preview", get(channel::preview))
+        .route("/:id/messages", get(channel::get_messages))
+        .route("/:id/messages", post(channel::create_message));
+
+    let feed_router = Router::new()
+        .route("/", get(feed::get_feeds))
+        .route("/", post(feed::create))
+        .route("/:id/comments", get(comment::get_comments))
+        .route("/:id/comments", post(comment::create_comment))
+        .route("/:id/img/:index", get(feed::get_feed_image));
+
     let router = Router::new()
-        .route("/users", post(user::create))
-        .route("/users/@me", get(user::get_me))
-        .route("/user/:name", get(user::get))
-        .route("/channels", post(channel::create))
-        .route("/channels/preview", get(channel::preview))
-        .route("/channels/:id/messages", get(channel::get_messages))
-        .route("/channels/:id/messages", post(channel::create_message))
-        .route("/feeds", post(feed::create))
-        .route("/feeds/home", get(feed::get_home))
-        .route("/feeds/:name", get(feed::get_user_feeds))
-        .route("/feeds/:id/comments", get(feed::get_comments))
-        .route("/feeds/:id/comments", post(feed::create_comment))
+        .route("/login", post(auth::login))
+        .nest("/users", user_router)
+        .nest("/channels", channel_router)
+        .nest("/feeds", feed_router)
+        .layer(TraceLayer::new_for_http())
+        .layer(cors_layer)
         .with_state(app_state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8000));
