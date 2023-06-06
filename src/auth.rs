@@ -62,11 +62,6 @@ impl AppState {
     pub async fn create_session(&self, user: &User) -> Result<String, sqlx::Error> {
         let key = Uuid::new_v4().to_string();
 
-        sqlx::query("DELETE FROM sessions WHERE user_id = ?")
-            .bind(user.id)
-            .execute(&self.db)
-            .await?;
-
         sqlx::query("INSERT INTO sessions (user_id, key) VALUES (?, ?)")
             .bind(user.id)
             .bind(&key)
