@@ -29,9 +29,13 @@ pub async fn create(
     State(app): State<Arc<AppState>>,
     Json(body): Json<CreateUserBody>,
 ) -> Response {
+    if app.find_user(&body.username).await.is_ok() {
+        return StatusCode::CONFLICT.into_response();
+    }
+
     if let Err(e) = app.create_user(&body.username, &body.password).await {
         eprintln!("{e:?}");
-        return StatusCode::CONFLICT.into_response();
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
     match app.find_user(&body.username).await {
